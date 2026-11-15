@@ -8,7 +8,8 @@ Full step-by-step setup and the list of what is built vs not built: **docs/SETUP
 - [x] Step 3: order creation and state machine
 - [x] Step 4: staff login and kitchen board (with a dev-only fake payment)
 - [x] Step 6 (core): owner dashboard, see docs/ADMIN.md
-- [ ] Steps 5, 7 to 10: real payments, notifications, SaaS billing, hardening, pilot
+- [x] Step 5 (core): Razorpay checkout, webhook, refunds, see docs/PAYMENTS.md
+- [ ] Steps 7 to 10 and payment hardening: notifications, SaaS billing, hardening, pilot
 
 ## Repo layout
 ```

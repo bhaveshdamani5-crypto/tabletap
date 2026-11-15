@@ -14,7 +14,7 @@ export const cartSchema = z.object({
     optionIds: z.array(z.string().uuid()).max(20), qty: z.number().int().min(1).max(20),
   })).min(1).max(40),
 });
-export type CreateOrderResult = { ok: true; orderId: string; accessToken: string; restaurantId: string } | { ok: false; error: string };
+export type CreateOrderResult = { ok: true; orderId: string; accessToken: string; restaurantId: string; totalPaise: number } | { ok: false; error: string };
 
 /** Turns a cart into a pending_payment order. Prices come from the DATABASE, never from the client. */
 export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
@@ -40,8 +40,8 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
 
   const db = createAdminClient();
   const rid = ctx.restaurant.id;
-  const { data: existing } = await db.from('orders').select('id,access_token').eq('restaurant_id', rid).eq('idempotency_key', input.idempotencyKey).maybeSingle();
-  if (existing) return { ok: true, orderId: existing.id, accessToken: existing.access_token, restaurantId: rid };
+  const { data: existing } = await db.from('orders').select('id,access_token,total_paise').eq('restaurant_id', rid).eq('idempotency_key', input.idempotencyKey).maybeSingle();
+  if (existing) return { ok: true, orderId: existing.id, accessToken: existing.access_token, restaurantId: rid, totalPaise: existing.total_paise };
 
   const { data: num, error: numErr } = await db.rpc('next_order_number', { p_restaurant_id: rid });
   const n = Array.isArray(num) ? num[0] : num;
@@ -63,5 +63,5 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
   if (itemsErr) { await db.from('orders').delete().eq('id', order.id); return { ok: false, error: 'Could not save your order. Please try again.' }; }
 
   await db.from('order_events').insert({ restaurant_id: rid, order_id: order.id, to_status: 'pending_payment', actor: 'guest' });
-  return { ok: true, orderId: order.id, accessToken: order.access_token, restaurantId: rid };
+  return { ok: true, orderId: order.id, accessToken: order.access_token, restaurantId: rid, totalPaise: totals.totalPaise };
 }

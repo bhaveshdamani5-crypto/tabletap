@@ -53,10 +53,8 @@ The staff dashboard only prints QR codes for active tables, and each code resolv
 4. **(you)** Create a Sentry project and add `@sentry/nextjs` with your DSN. Add an UptimeRobot monitor on `/api/health`.
 5. Use a **separate Supabase project for production**, with no seed data.
 
-## Part E. Real payments (the next big step)
-1. **(you)** Call Razorpay and Cashfree sales. Ask which product lets a software vendor take payments for many cafes, whether each cafe needs its own account, settlement time for UPI, and fees. Get answers in writing.
-2. **(you)** Open the chosen gateway account in test mode and share the test key id and secret with your own `.env.local` (never with anyone else).
-3. Then build Step 5 from `content.md`: gateway order creation, checkout, signed webhook, refunds, reconciliation. The fake payment in `app/actions/guest.ts` is the exact spot to replace.
+## Part E. Test payments with Razorpay
+The Razorpay test-mode integration, webhook, and refund setup is documented in [docs/PAYMENTS.md](./PAYMENTS.md). Use TEST keys only. Before accepting live payments for multiple cafes, get written guidance from Razorpay about marketplace/platform onboarding and settlement.
 
 ## What is built and tested (here, without live accounts)
 | Area | State |
@@ -64,7 +62,7 @@ The staff dashboard only prints QR codes for active tables, and each code resolv
 | Database schema, security rules, seed (158 items), 41 isolation tests | Built, passes on real Postgres |
 | Guest menu, options, cart, tax totals | Built, checked in a phone-sized browser |
 | Server-side price check and order state machine | Built, 19 unit tests |
-| `createOrder`, `transitionOrder`, fake payment, order status page | Built, compiles; **not run against live Supabase** |
+| Order creation, Razorpay Checkout, signature verification, webhooks, refunds | Built and unit-tested; **not run against Razorpay's servers** |
 | Staff login, kitchen board (sound, realtime plus polling, disconnect banner, reject, out-of-stock) | Built, compiles; **not run against live Supabase** |
 | Owner dashboard (overview, menu, tables + printable QR, settings) | Built, reports math unit-tested; **not run against live Supabase** (see docs/ADMIN.md) |
 | QR generator, staff creation script | Built, **not run against live Supabase** |
@@ -73,7 +71,7 @@ The staff dashboard only prints QR codes for active tables, and each code resolv
 ## What is NOT built yet
 | Missing | Why / what it needs |
 |---|---|
-| Real payments, webhooks, refunds, reconciliation (Step 5) | Needs your gateway account and answers from their sales team |
+| Payment hardening: expiry, late-capture refunds, reconciliation, refund retries, per-cafe accounts | See docs/PAYMENTS.md; not built yet |
 | Owner dashboard extras: editing size/type options and add-ons, drag-to-reorder, staff invites, CSV export, date ranges | Buildable next |
 | Receipts by WhatsApp or email, daily owner summary, alerts to you (Step 7) | Needs WhatsApp Business or email provider accounts |
 | Background job worker and nightly jobs | Needs a decision on Vercel Cron vs Supabase scheduling; buildable next |

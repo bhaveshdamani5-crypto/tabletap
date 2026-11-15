@@ -1,10 +1,28 @@
 'use client';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { placeOrder } from '@/app/actions/guest';
+import { placeOrder, verifyPayment } from '@/app/actions/guest';
 import type { MenuItem, TableContext } from '@/lib/menu/types';
 import { formatRupees } from '@/lib/money';
 import { computeTotals, unitPrice, PricingError } from '@/lib/orders/pricing';
+
+declare global { interface Window { Razorpay: new (o: Record<string, unknown>) => { open(): void } } }
+function loadCheckout() {
+  return new Promise<void>((resolve, reject) => {
+    if (window.Razorpay) return resolve();
+    const s = document.createElement('script'); s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    s.onload = () => resolve(); s.onerror = () => reject(new Error('load')); document.body.appendChild(s);
+  });
+}
+
+function newIdempotencyKey() {
+  if (typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+  const bytes = window.crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 type Line = { key: string; item: MenuItem; variantId: string | null; optionIds: string[]; label: string; unitPaise: number; qty: number };
 
@@ -43,9 +61,28 @@ export function MenuClient({ ctx, token }: { ctx: TableContext; token: string })
   }
   async function pay() {
     setPlacing(true); setErr('');
-    const res = await placeOrder({ slug: r.slug, token, idempotencyKey: crypto.randomUUID(),
+    let idempotencyKey: string;
+    try { idempotencyKey = newIdempotencyKey(); }
+    catch {
+      setErr('Could not securely prepare your order. Please try a current browser or use HTTPS.');
+      setPlacing(false);
+      return;
+    }
+    const res = await placeOrder({ slug: r.slug, token, idempotencyKey,
       lines: cart.map((l) => ({ itemId: l.item.id, variantId: l.variantId, optionIds: l.optionIds, qty: l.qty })) });
-    if (res.ok) router.push(`/order/${res.orderId}?t=${res.accessToken}`); else { setErr(res.error); setPlacing(false); }
+    if (!res.ok) { setErr(res.error); setPlacing(false); return; }
+    const go = () => router.push(`/order/${res.orderId}?t=${res.accessToken}`);
+    if (!res.checkout) { go(); return; }
+    try {
+      await loadCheckout();
+      const c = res.checkout;
+      new window.Razorpay({ key: c.keyId, amount: c.amountPaise, currency: 'INR', name: r.name, order_id: c.orderId, theme: { color: accent },
+        handler: async (p: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+          await verifyPayment({ orderId: res.orderId, accessToken: res.accessToken, ...p });
+          go();   // if verification missed, the status page still flips to paid when the webhook arrives
+        },
+        modal: { ondismiss: () => setPlacing(false) } }).open();
+    } catch { setErr('Could not open the payment window. Please try again.'); setPlacing(false); }
   }
   const bump = (key: string, d: number) => setCart((c) => c.map((l) => l.key === key ? { ...l, qty: l.qty + d } : l).filter((l) => l.qty > 0));
   const needsChoice = (i: MenuItem) => i.variants.length > 0 || i.groups.length > 0;
